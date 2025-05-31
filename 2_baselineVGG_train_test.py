@@ -323,10 +323,8 @@ if __name__ == '__main__':
 
     COUNTRY = 'KR'
     data_date = f'20250320'
-    model_VERSION = 'v7'
-    image_VERSION = 'v7'
 
-    image_path = f'./data/{data_source}/image/{COUNTRY}_{image_VERSION}_All'
+    image_path = f'./data/{data_source}/image/{COUNTRY}_All'
     DB_path = f'./data/{data_source}/DB/{data_date}'
 
     transform = transforms.ToTensor()
@@ -335,6 +333,9 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
 
     model_name = 'BaselineVGG'
+    model_save_path = f"./models/{COUNTRY}_{model_name}"
+    os.makedirs(model_save_path, exist_ok=True)
+
     Max_EPOCH = 1000
     cap_cut=0.0
     BATCH_SIZE = 128
@@ -354,9 +355,6 @@ if __name__ == '__main__':
     monthly_dates = monthly_dates.loc["2010-06":data_date]
     monthly_dates = monthly_dates.loc[monthly_dates.index[monthly_dates.index.month.isin([6,12])]]
     monthly_dates = monthly_dates.reset_index().assign(next_month=lambda x: x['date'].shift(-1))[['date', 'next_month']]  # .applymap(lambda x:pd.to_datetime(x))
-
-    model_save_path = f"./models/{COUNTRY}_img{image_VERSION}_mdl{model_VERSION}"
-    os.makedirs(model_save_path, exist_ok=True)
 
     learn_DATE = '2022-12-31'
     test_DATE = '2025-04-30'
