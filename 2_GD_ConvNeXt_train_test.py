@@ -334,6 +334,7 @@ if __name__ == '__main__':
     # 각종 Hyper-parameters 설정
     criterion = nn.CrossEntropyLoss()
 
+    model_name = 'ConvNeXt'
     Max_EPOCH = 1000
     cap_cut=0.0
     BATCH_SIZE = 128
@@ -395,8 +396,8 @@ if __name__ == '__main__':
         print(f'LR_pow: {LR_pow}')
         print(f'iteration: {i}')
 
-        bCNN_050505_mdl_pth = f"{model_save_path}/bCNN_050505_{learn_DATE_str}_{i}.pt"
-        bCNN_050505_hry_pth = f"{model_save_path}/bCNN_050505_{learn_DATE_str}_{i}_hist.pt"
+        bCNN_050505_mdl_pth = f"{model_save_path}/{model_name}_050505_{learn_DATE_str}_{i}.pt"
+        bCNN_050505_hry_pth = f"{model_save_path}/{model_name}_050505_{learn_DATE_str}_{i}_hist.pt"
 
         bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
         bCNN_050505_model_latest_val_loss = 100E100
