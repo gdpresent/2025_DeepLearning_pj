@@ -322,7 +322,7 @@ if __name__ == '__main__':
     data_source = 'FnGuide'
 
     COUNTRY = 'KR'
-    data_date = f'20250320'
+    data_date = f'20250527'
 
     image_path = f'./data/{data_source}/image/{COUNTRY}_All'
     DB_path = f'./data/{data_source}/DB/{data_date}'

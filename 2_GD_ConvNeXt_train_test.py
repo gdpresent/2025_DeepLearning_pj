@@ -322,7 +322,7 @@ if __name__ == '__main__':
     data_source = 'FnGuide'
 
     COUNTRY = 'KR'
-    data_date = f'20250320'
+    data_date = f'20250527'
 
     image_path = f'./data/{data_source}/image/{COUNTRY}_All'
     DB_path = f'./data/{data_source}/DB/{data_date}'
@@ -331,7 +331,7 @@ if __name__ == '__main__':
 
     # 각종 Hyper-parameters 설정
     criterion = nn.CrossEntropyLoss()
-    '2_GD_ConvNeXt_train_test'
+
     model_name = 'ConvNeXt'
     model_save_path = f"./models/{COUNTRY}_{model_name}"
     os.makedirs(model_save_path, exist_ok=True)
