@@ -334,13 +334,13 @@ if __name__ == '__main__':
     # 각종 Hyper-parameters 설정
     criterion = nn.CrossEntropyLoss()
 
-    Max_EPOCH =
-    cap_cut=
-    BATCH_SIZE =
-    MaxTry =
-    LR_pow =
-    DR =
-    TRAIN_RATIO=
+    Max_EPOCH = 1000
+    cap_cut=0.0
+    BATCH_SIZE = 128
+    MaxTry = 3
+    LR_pow = 5
+    DR = 50
+    TRAIN_RATIO= 0.7
 
     CAP = int(cap_cut*100)
     LR = 1 / (10 ** LR_pow)
@@ -357,8 +357,8 @@ if __name__ == '__main__':
     model_save_path = f"./models/{COUNTRY}_img{image_VERSION}_mdl{model_VERSION}"
     os.makedirs(model_save_path, exist_ok=True)
 
-    learn_DATE =
-    test_DATE =
+    learn_DATE = '2022-12-31'
+    test_DATE = '2025-04-30'
 
     learn_DATE_str = pd.to_datetime(learn_DATE).strftime("%Y%m%d")
     test_DATE_str = pd.to_datetime(test_DATE).strftime("%Y%m%d")

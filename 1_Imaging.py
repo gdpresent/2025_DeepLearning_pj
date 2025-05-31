@@ -13,6 +13,17 @@ import warnings
 # from GD_utils.AI_tool.CNN_tool import process_params, process_imaging, OHLCV_cls
 warnings.filterwarnings('ignore')
 
+def read_pd_parquet(location):
+    start = time.time()
+    read = pd.read_parquet(location)
+    print(f'Loading Complete({round((time.time() - start) / 60, 2)}min): {location}')
+    return read
+def save_as_pd_parquet(location, pandas_df_form):
+    start = time.time()
+    pandas_df_form.to_parquet(f'{location}')
+    print(f'Saving Complete({round((time.time() - start) / 60, 2)}min): {location}')
+
+
 def process_params(code, year_price, ExPost_return, from_day_type_int, to_day_type_int, image_size_dict, only_today=False):
     # code = 'A0015B0'
     # from_day_type_int, to_day_type_int = from_day_type, to_day_type
@@ -464,7 +475,7 @@ if __name__ == '__main__':
     print(f'years: \n{years}')
     num_cores = mp.cpu_count()
     for year in years[::-1]:
-        for from_day_type, to_day_type in [[20,20],[20,5],[5,5]]:
+        for from_day_type, to_day_type in [[20,20],[5,5]]:
             if os.path.exists(f"{image_save_loc}/{from_day_type}day_to_{to_day_type}day_{year}.h5"):
                 print(f"################ PASS: {image_save_loc}/{from_day_type}day_to_{to_day_type}day_{year}.h5")
                 continue
