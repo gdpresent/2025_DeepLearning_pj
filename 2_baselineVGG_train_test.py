@@ -356,8 +356,8 @@ if __name__ == '__main__':
     monthly_dates = monthly_dates.loc[monthly_dates.index[monthly_dates.index.month.isin([6,12])]]
     monthly_dates = monthly_dates.reset_index().assign(next_month=lambda x: x['date'].shift(-1))[['date', 'next_month']]  # .applymap(lambda x:pd.to_datetime(x))
 
-    learn_DATE = '2022-12-31'
-    test_DATE = '2025-04-30'
+    learn_DATE = pd.to_datetime('2022-12-31')
+    test_DATE = pd.to_datetime('2025-04-30')
 
     learn_DATE_str = pd.to_datetime(learn_DATE).strftime("%Y%m%d")
     test_DATE_str = pd.to_datetime(test_DATE).strftime("%Y%m%d")
