@@ -11,6 +11,8 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from torch.utils.data import DataLoader, Dataset, Subset
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from torch.cuda.amp import autocast, GradScaler
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 # from GD_utils.AI_tool.CNN_tool import baseline_CNN_5day
 # from GD_utils.AI_tool.CNN_tool import CustomDataset_all
@@ -316,6 +318,109 @@ class CustomDataset_all(Dataset):
         return output
 
 
+class ConvNeXtBlock(nn.Module):
+    """
+    ConvNeXt 스타일의 블록(DepthwiseConv -> LayerNorm -> PointwiseConv -> Activation -> Residual).
+    기본 커널: (7,3) (가로7, 세로3)처럼 직사 형태.
+    """
+
+    def __init__(self, dim, kernel_size=(7, 3), drop_path=0.0):
+        super().__init__()
+        self.dwconv = nn.Conv2d(
+            dim, dim,
+            kernel_size=kernel_size,
+            padding=(kernel_size[0] // 2, kernel_size[1] // 2),
+            groups=dim
+        )
+        # ConvNeXt 논문에서는 LayerNorm을 Channel차원에 적용하기 위해,
+        # 2D 이미지에 대해서는 GroupNorm(1, dim)과 비슷한 효과를 줍니다.
+        self.ln = nn.GroupNorm(num_groups=1, num_channels=dim)
+
+        # Pointwise Conv (1x1 Conv)
+        self.pwconv = nn.Conv2d(dim, dim, kernel_size=1)
+
+        # Activation
+        self.act = nn.GELU()
+
+        # DropPath (Stochastic Depth) - 매우 얕을 경우는 생략 가능
+        self.gamma = drop_path
+
+    def forward(self, x):
+        shortcut = x
+        x = self.dwconv(x)
+        x = self.ln(x)
+        x = self.pwconv(x)
+        x = self.act(x)
+        if self.gamma > 0.0 and self.training:
+            # DropPath 구현 (아주 간단 버전)
+            keep_prob = 1.0 - self.gamma
+            mask = torch.rand((x.size(0), 1, 1, 1), dtype=x.dtype, device=x.device) < keep_prob
+            x = x / keep_prob * mask
+
+        x = x + shortcut  # Residual connection
+        return x
+
+
+class ConvNeXt_shallow(nn.Module):
+    """
+    ConvNeXt를 얕게(shallow) 구성: stem + N개의 ConvNeXtBlock + classifier
+    blocks: 몇 개의 ConvNeXtBlock을 쌓을지
+    in_ch: 입력 이미지 채널 수
+    num_classes: 분류 클래스 수
+    """
+
+    def __init__(self, in_ch=1, num_classes=2, blocks=2, base_dim=64,
+                 kernel_size=(7, 3), drop_path_rate=0.0, dr_rate=0.5):
+        super().__init__()
+
+        self.blocks = blocks
+        self.drop_rate = dr_rate
+
+        # Stem 부분: 입력 채널 -> base_dim으로
+        # 보통 ConvNeXt는 stem에서 큰 커널로 downsampling, 여기서는 간단히 (5,3) 커널 + stride 조절
+        self.stem = nn.Sequential(
+            nn.Conv2d(in_ch, base_dim, kernel_size=(5, 3), padding=(2, 1), stride=(1, 1)),
+            nn.BatchNorm2d(base_dim),
+            nn.LeakyReLU()
+            # 필요하면 MaxPool2d((2,1)) 등을 한 번 적용해서 세로방향 크기를 줄이는 것도 가능
+        )
+
+        # ConvNeXt Blocks
+        self.blocks_layer = nn.Sequential(*[
+            ConvNeXtBlock(dim=base_dim, kernel_size=kernel_size, drop_path=drop_path_rate)
+            for _ in range(blocks)
+        ])
+
+        # 풀링(필요시)
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+
+        # 분류기
+        self.dropout = nn.Dropout(dr_rate)
+        self.classifier = nn.Linear(base_dim, num_classes)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0.01)
+
+    def forward(self, x):
+        # x shape: (B, in_ch, 35, 15) 가정
+        x = self.stem(x)  # (B, base_dim, 35, 15)
+        x = self.blocks_layer(x)  # (B, base_dim, 35, 15) 동일
+
+        # 필요하면 중간에 한 번 더 풀링/다운샘플 등
+        # x = F.max_pool2d(x, (2,1)) 등등
+
+        x = self.pool(x)  # (B, base_dim, 1, 1)
+        x = x.flatten(1)  # (B, base_dim)
+
+        x = self.dropout(x)
+        x = self.classifier(x)  # (B, num_classes)
+        return x
+
 if __name__ == '__main__':
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     print(DEVICE)
@@ -397,11 +502,21 @@ if __name__ == '__main__':
         bCNN_050505_mdl_pth = f"{model_save_path}/{model_name}_050505_{learn_DATE_str}_{i}.pt"
         bCNN_050505_hry_pth = f"{model_save_path}/{model_name}_050505_{learn_DATE_str}_{i}_hist.pt"
 
-        bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
+        # bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
+        bCNN_050505_model = nn.DataParallel(ConvNeXt_shallow(
+                                                in_ch=1,       # 혹은 3
+                                                num_classes=2,
+                                                blocks=2,      # 2개 블록으로 실험
+                                                base_dim=64,
+                                                kernel_size=(7,3),
+                                                drop_path_rate=0.05,
+                                                dr_rate=0.3)).to(DEVICE)
         bCNN_050505_model_latest_val_loss = 100E100
 
         # optimizer 설정해서
-        bCNN_050505_optr = optim.Adam(bCNN_050505_model.parameters(), lr=LR)
+        # bCNN_050505_optr = optim.Adam(bCNN_050505_model.parameters(), lr=LR)
+        bCNN_050505_optimizer = AdamW(bCNN_050505_model.parameters(), lr=LR, weight_decay=1e-4)
+        bCNN_050505_scheduler = CosineAnnealingWarmRestarts(bCNN_050505_optimizer, T_0=10, T_mult=2)
 
         print('================bCNN_050505================\n' * 1)
         bCNN_050505_Tacc, bCNN_050505_Vacc, bCNN_050505_eps = Train_Nepoch_ES_AMP(bCNN_050505_model,
