@@ -170,9 +170,9 @@ def convert_ohlcv_to_image(df, height, interval):
                 volume_pixel = int(np.round(row['volume'] * volume_scale))
                 if volume_pixel!=0:
                     img[-int(volume_pixel):, 3 * i + 1] = 255
+        return img
     else:
         return None
-    return img
 def process_imaging(params):
     input_df, code, end_dt, label, day_type, image_size_dict = params
     img = convert_ohlcv_to_image(input_df, image_size_dict[day_type][0], image_size_dict[day_type][1])
