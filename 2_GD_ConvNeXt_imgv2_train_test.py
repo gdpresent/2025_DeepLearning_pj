@@ -493,7 +493,7 @@ if __name__ == '__main__':
     COUNTRY = 'KR'
     data_date = f'20250527'
 
-    image_path = f'./data/{data_source}/image/{COUNTRY}_All'
+    image_path = f'./data/{data_source}/image/{COUNTRY}_v8_All'
     DB_path = f'./data/{data_source}/DB/{data_date}'
 
     transform = transforms.ToTensor()
@@ -501,7 +501,7 @@ if __name__ == '__main__':
     # 각종 Hyper-parameters 설정
     criterion = nn.CrossEntropyLoss()
 
-    model_name = 'ConvNeXt'
+    model_name = 'ConvNeXt_imgv2'
     model_save_path = f"./models/{COUNTRY}_{model_name}"
     os.makedirs(model_save_path, exist_ok=True)
 
@@ -597,7 +597,7 @@ if __name__ == '__main__':
                         bCNN_050505_hry_pth = f"{model_save_path}/BD{base_dim}_Dpt{depths_idx}_DrPthR{drop_path_rate}_LR{lr_tag}_hist.pt"
 
                         # bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
-                        bCNN_050505_model = ConvNeXtLite(in_ch=1, num_classes=2, base_dim=base_dim, depths=depths, drop_path_rate=drop_path_rate, dr_rate=dr_rate).to(DEVICE)
+                        bCNN_050505_model = ConvNeXtLite(in_ch=3, num_classes=2, base_dim=base_dim, depths=depths, drop_path_rate=drop_path_rate, dr_rate=dr_rate).to(DEVICE)
                         bCNN_050505_model_latest_val_loss = 100E100
 
                         # optimizer 설정해서
@@ -617,12 +617,10 @@ if __name__ == '__main__':
                                                                                                   TRAIN_RATIO,
                                                                                                   bCNN_050505_mdl_pth,
                                                                                                   bCNN_050505_hry_pth,
-                                                                                                  MaxTry,
-                                                                                                  bCNN_050505_model_latest_val_loss,
+                                                                                                  MaxTry,                                                                                                bCNN_050505_model_latest_val_loss,
                                                                                                   bCNN_050505_scheduler
                                                                                                   )
-
-                        bCNN_050505_model = ConvNeXtLite(in_ch=1, num_classes=2, base_dim=base_dim, depths=depths, drop_path_rate=drop_path_rate, dr_rate=dr_rate).to(DEVICE)
+                        bCNN_050505_model = ConvNeXtLite(in_ch=3, num_classes=2, base_dim=base_dim, depths=depths, drop_path_rate=drop_path_rate, dr_rate=dr_rate).to(DEVICE)
                         bCNN_050505_model.load_state_dict(torch.load(bCNN_050505_mdl_pth, map_location=DEVICE))
 
                         bCNN_050505_avg_loss, \
