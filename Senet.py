@@ -454,33 +454,3 @@ if __name__ == "__main__":
     print(f"Mean F1 Score  : {mean_f1*100:.2f}%")
 
 
-# In[116]:
-
-
-import pandas as pd
-import pickle
-
-# DataFrame으로 변환
-results_df = pd.DataFrame(ALL_RESULTS)
-results_df.index = [f"Iteration {i+1}" for i in range(len(results_df))]
-
-# 평균 행 추가
-mean_row = results_df.mean().to_frame().T
-mean_row.index = ['Mean']
-results_df = pd.concat([results_df, mean_row])
-"""
-# CSV 저장
-results_df.to_csv("senet_eval_results.csv", index=True)
-print("[CSV 저장 완료] → senet_eval_results.csv")
-
-# Pickle 저장
-with open("senet_eval_results.pkl", "wb") as f:
-    pickle.dump(ALL_RESULTS, f)
-print("[Pickle 저장 완료] → senet_eval_results.pkl")
-
-
-# In[118]:
-
-
-results_df
-
