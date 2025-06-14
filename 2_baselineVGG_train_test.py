@@ -314,6 +314,15 @@ class CustomDataset_all(Dataset):
         else:
             output = read_pd_parquet(f'{self.DB_path}/{self.country}_ExPost_return_{n_day}_{self.data_date}.hd5')
         return output
+def inference_result_save(pred1, test_code, test_date, test_return, test_label, epoches):
+    return pd.DataFrame(
+        {
+            "Prob_Positive": pred1,
+            "종목코드": test_code,
+            "return": test_return,
+            "label": test_label,
+            "epoch": epoches
+        }, index=pd.to_datetime(test_date)).rename_axis("date").sort_index()
 
 
 if __name__ == '__main__':
@@ -324,7 +333,7 @@ if __name__ == '__main__':
     COUNTRY = 'KR'
     data_date = f'20250527'
 
-    image_path = f'./data/{data_source}/image/{COUNTRY}_All'
+    image_path = f'./data/{data_source}/image/{COUNTRY}_v1_All'
     DB_path = f'./data/{data_source}/DB/{data_date}'
 
     transform = transforms.ToTensor()
@@ -349,6 +358,7 @@ if __name__ == '__main__':
     dr_rate = DR/100
 
     SAVE_CONCAT = pd.DataFrame()
+    CodeName=pd.read_excel(f'./data/FnGuide/excel/KR_daily_data_{data_date}.xlsx', sheet_name='보통주', index_col=0)
     Cap_df_raw = read_pd_parquet(f'{DB_path}/KR_mktcap_{data_date}.hd5').sort_index()
     business_dates = Cap_df_raw[[Cap_df_raw.notna().sum().sort_values().index[-1]]]
     monthly_dates = business_dates.groupby(pd.Grouper(freq='BM')).tail(1)#.iloc[:-1]
@@ -366,73 +376,81 @@ if __name__ == '__main__':
     print('next DATE: ', test_DATE_str)
 
 
-    dataset_050505 = CustomDataset_all(image_data_path=image_path,
-                                       train=True,
-                                       data_date=data_date,
-                                       data_source=data_source,
-                                       F_day_type=5,
-                                       T_day_type=5,
-                                       Pred_Hrz=5,
-                                       until_date=learn_DATE,
-                                       stt_date=learn_DATE - pd.DateOffset(years=2),
-                                       cap_criterion=cap_cut,
-                                       transform=transform
-                                       )
+    test_DL_050505 = DataLoader(CustomDataset_all(
+        image_path,
+        train=False,
+        data_date=data_date,
+        data_source=data_source,
+        F_day_type=5, T_day_type=5,
+        stt_date=learn_DATE + pd.DateOffset(days=1),
+        until_date=test_DATE,
+        Pred_Hrz=5,
+        cap_criterion=cap_cut,
+        transform=transform
+    ), batch_size=256, shuffle=False)
+    output_df=pd.DataFrame()
     for i in range(1, 6):
-        Randomly_Stratified_050505 = StratifiedShuffleSplit(n_splits=1, test_size=(1 - TRAIN_RATIO))
-        train_idx_050505, val_idx_050505 = next(Randomly_Stratified_050505.split(list(range(len(dataset_050505))), dataset_050505.labels))
-        train_DS_050505 = Subset(dataset_050505, train_idx_050505)
-        val_DS_050505 = Subset(dataset_050505, val_idx_050505)
-
-        train_DL_050505 = DataLoader(train_DS_050505, batch_size=BATCH_SIZE, shuffle=True);
-        val_DL_050505 = DataLoader(val_DS_050505, batch_size=BATCH_SIZE, shuffle=True)
-
         print(f'learn_date: {learn_DATE_str}')
         print(f'cap_cut: {CAP}')
         print(f'BATCH SIZE: {BATCH_SIZE}')
         print(f'MaxTry: {MaxTry}')
         print(f'LR_pow: {LR_pow}')
         print(f'iteration: {i}')
+        dataset_050505 = CustomDataset_all(image_data_path=image_path,
+                                           train=True,
+                                           data_date=data_date,
+                                           data_source=data_source,
+                                           F_day_type=5,
+                                           T_day_type=5,
+                                           Pred_Hrz=5,
+                                           until_date=learn_DATE,
+                                           stt_date=learn_DATE - pd.DateOffset(years=2),
+                                           cap_criterion=cap_cut,
+                                           transform=transform
+                                           )
+        Randomly_Stratified_050505 = StratifiedShuffleSplit(n_splits=1, test_size=(1 - TRAIN_RATIO))
+        train_idx_050505, val_idx_050505 = next(
+            Randomly_Stratified_050505.split(list(range(len(dataset_050505))), dataset_050505.labels))
+        train_DS_050505 = Subset(dataset_050505, train_idx_050505)
+        val_DS_050505 = Subset(dataset_050505, val_idx_050505)
+
+        train_DL_050505 = DataLoader(train_DS_050505, batch_size=BATCH_SIZE, shuffle=True)
+        val_DL_050505 = DataLoader(val_DS_050505, batch_size=BATCH_SIZE, shuffle=True)
 
         bCNN_050505_mdl_pth = f"{model_save_path}/{model_name}_050505_{learn_DATE_str}_{i}.pt"
         bCNN_050505_hry_pth = f"{model_save_path}/{model_name}_050505_{learn_DATE_str}_{i}_hist.pt"
+        if os.path.exists(bCNN_050505_hry_pth):
+            print(f'이미 학습된 모델이 존재합니다: {bCNN_050505_mdl_pth}')
+            pass
+        else:
+            print(f'모델 학습 시작: {bCNN_050505_mdl_pth}')
+            bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
+            bCNN_050505_model_latest_val_loss = 100E100
 
-        bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
-        bCNN_050505_model_latest_val_loss = 100E100
+            # optimizer 설정해서
+            bCNN_050505_optr = optim.Adam(bCNN_050505_model.parameters(), lr=LR)
 
-        # optimizer 설정해서
-        bCNN_050505_optr = optim.Adam(bCNN_050505_model.parameters(), lr=LR)
-
-        print('================bCNN_050505================\n' * 1)
-        bCNN_050505_Tacc, bCNN_050505_Vacc, bCNN_050505_eps = Train_Nepoch_ES_AMP(bCNN_050505_model,
-                                                                                  train_DL_050505,
-                                                                                  val_DL_050505,
-                                                                                  criterion,
-                                                                                  DEVICE,
-                                                                                  bCNN_050505_optr,
-                                                                                  Max_EPOCH, BATCH_SIZE,
-                                                                                  TRAIN_RATIO,
-                                                                                  bCNN_050505_mdl_pth,
-                                                                                  bCNN_050505_hry_pth,
-                                                                                  MaxTry,
-                                                                                  bCNN_050505_model_latest_val_loss
-                                                                                  )
+            print('================bCNN_050505================\n' * 1)
+            bCNN_050505_Tacc, bCNN_050505_Vacc, bCNN_050505_eps = Train_Nepoch_ES_AMP(bCNN_050505_model,
+                                                                                      train_DL_050505,
+                                                                                      val_DL_050505,
+                                                                                      criterion,
+                                                                                      DEVICE,
+                                                                                      bCNN_050505_optr,
+                                                                                      Max_EPOCH, BATCH_SIZE,
+                                                                                      TRAIN_RATIO,
+                                                                                      bCNN_050505_mdl_pth,
+                                                                                      bCNN_050505_hry_pth,
+                                                                                      MaxTry,
+                                                                                      bCNN_050505_model_latest_val_loss
+                                                                                      )
 
         bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
         bCNN_050505_model.load_state_dict(torch.load(bCNN_050505_mdl_pth, map_location=DEVICE))
+        model_hist = torch.load(bCNN_050505_hry_pth)
+        bCNN_050505_Tacc, bCNN_050505_Vacc, bCNN_050505_eps = model_hist["acc_history"]['train'][-1], \
+        model_hist["acc_history"]['val'][-1], len(model_hist["acc_history"]['train'])
 
-        test_DL_050505 = DataLoader(CustomDataset_all(
-                                                      image_path,
-                                                      train=False,
-                                                      data_date=data_date,
-                                                      data_source=data_source,
-                                                      F_day_type=5, T_day_type=5,
-                                                      stt_date=learn_DATE + pd.DateOffset(days=1),
-                                                      until_date=test_DATE,
-                                                      Pred_Hrz=5,
-                                                      cap_criterion=cap_cut,
-                                                      transform=transform
-                                                      ), batch_size=256, shuffle=False)
 
         bCNN_050505_avg_loss, \
         bCNN_050505_preds_tmp,\
@@ -459,6 +477,14 @@ if __name__ == '__main__':
         # F1 = Prediction와 Recall의 조화평균
         bCNN_050505_f1 = f1_score(bCNN_050505_labels, bCNN_050505_preds)
 
+        pred_result = inference_result_save(bCNN_050505_1preds, bCNN_050505_codes, bCNN_050505_dates,
+                                            bCNN_050505_returns, bCNN_050505_labels, bCNN_050505_eps)
+        pred_result = pred_result[pred_result['종목코드'].isin(CodeName.index)]
+        pred_result['Prob_Positive_intRank_False'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False)
+        pred_result['Prob_Positive_pctRank_Flase'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False, pct=True)
+        pred_result['Prob_Positive_intRank_True'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=True)
+        pred_result['Prob_Positive_pctRank_True'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=True, pct=True)
+
         print(f'{"=" * 20} bCNN_050505{"=" * 20}')
         print(f'bCNN_050505 labels: {int(100 * (sum(bCNN_050505_labels) / len(bCNN_050505_labels)))}%')
         print(f'bCNN_050505 predicts: {int(100 * (sum(bCNN_050505_preds) / len(bCNN_050505_preds)))}%')
@@ -466,3 +492,41 @@ if __name__ == '__main__':
         print(f'bCNN_050505 Precision: {int(10000 * (bCNN_050505_prec)) / 100}%')
         print(f'bCNN_050505 Recall: {int(10000 * (bCNN_050505_rcll)) / 100}%')
         print(f'bCNN_050505 F1-score: {int(10000 * (bCNN_050505_f1)) / 100}%')
+        tmp = pd.DataFrame({
+            'iter': i,
+            'acc_Train': [bCNN_050505_Tacc],
+            'accVal': [bCNN_050505_Vacc],
+            'acc_Test': [bCNN_050505_acc],
+            'eps': [bCNN_050505_eps],
+            'avg_loss': [bCNN_050505_avg_loss],
+
+            'prec': [bCNN_050505_prec],
+            'rcll': [bCNN_050505_rcll],
+            'f1': [bCNN_050505_f1],
+
+            'preds': [sum(bCNN_050505_preds) / len(bCNN_050505_preds)],
+            'TOP5_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_intRank_False'] <= 5, 'return'].mean(),
+            'TOP10_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_intRank_False'] <= 10, 'return'].mean(),
+            'TOP30_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_intRank_False'] <= 30, 'return'].mean(),
+            'BTM5_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 5, 'return'].mean(),
+            'BTM10_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 10, 'return'].mean(),
+            'BTM30_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 30, 'return'].mean(),
+
+            'TOPQ1_Cnt': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.1, 'return'].groupby('date').count().mean(),
+            'TOPQ1_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.1, 'return'].mean(),
+            'TOPQ2_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.2, 'return'].mean(),
+            'TOPQ3_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.3, 'return'].mean(),
+            'BTMQ1_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.1, 'return'].mean(),
+            'BTMQ2_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.2, 'return'].mean(),
+            'BTMQ3_AvgRtrn': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.3, 'return'].mean(),
+
+            'THR50_Cnt': pred_result.loc[pred_result['Prob_Positive'] >= 0.50, 'return'].groupby('date').count().mean(),
+            'THR55_Cnt': pred_result.loc[pred_result['Prob_Positive'] >= 0.55, 'return'].groupby('date').count().mean(),
+            'THR60_Cnt': pred_result.loc[pred_result['Prob_Positive'] >= 0.60, 'return'].groupby('date').count().mean(),
+            'THR50_AvgRtrn': pred_result.loc[pred_result['Prob_Positive'] >= 0.50, 'return'].mean(),
+            'THR55_AvgRtrn': pred_result.loc[pred_result['Prob_Positive'] >= 0.55, 'return'].mean(),
+            'THR60_AvgRtrn': pred_result.loc[pred_result['Prob_Positive'] >= 0.60, 'return'].mean(),
+        })
+        output_df = pd.concat([output_df, tmp], ignore_index=True)
+        print(output_df)
+    output_df.to_excel('./baselineVGG_results.xlsx', index=False)
