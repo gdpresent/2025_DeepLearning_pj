@@ -524,6 +524,7 @@ if __name__ == '__main__':
     print('next DATE: ', test_DATE_str)
 
     it_n=0
+    output_df = pd.DataFrame()
     for img_version in [1, 2]:
         if img_version == 1:
             in_ch=1
@@ -581,7 +582,6 @@ if __name__ == '__main__':
         # T_0_list = [10]  # cosine restart period
         # T_mult_list = [2]  # restart multiplier
         tot_loop = len(base_dim_list) * len(depths_list) * len(drop_path_rate_list) * len(dr_rate_list) * len(lr_list) *2
-        output_df = pd.DataFrame()
         for base_dim in base_dim_list:
             for depths in depths_list:
                 for drop_path_rate in drop_path_rate_list[::-1]:
@@ -657,8 +657,10 @@ if __name__ == '__main__':
                             bCNN_050505_f1 = f1_score(bCNN_050505_labels, bCNN_050505_preds)
                             pred_result=inference_result_save(bCNN_050505_1preds, bCNN_050505_codes, bCNN_050505_dates, bCNN_050505_returns, bCNN_050505_labels, bCNN_050505_eps)
                             pred_result=pred_result[pred_result['종목코드'].isin(CodeName.index)]
-                            pred_result['Prob_Positive_intRank'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False)
-                            pred_result['Prob_Positive_pctRank'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False, pct=True)
+                            pred_result['Prob_Positive_intRank_False'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False)
+                            pred_result['Prob_Positive_pctRank_Flase'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False, pct=True)
+                            pred_result['Prob_Positive_intRank_True'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=True)
+                            pred_result['Prob_Positive_pctRank_True'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=True, pct=True)
 
                             print(f'{"=" * 20} bCNN_050505{"=" * 20}')
                             print(f'bCNN_050505 labels: {int(100 * (sum(bCNN_050505_labels) / len(bCNN_050505_labels)))}%')
@@ -682,30 +684,39 @@ if __name__ == '__main__':
                                 'drop_path_rate': [drop_path_rate],
                                 'dr_rate': [dr_rate],
                                 'lr': [lr],
-                                'bCNN_050505_TOP5_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank']<=5, 'return'].mean(),
-                                'bCNN_050505_TOP10_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank']<=10, 'return'].mean(),
-                                'bCNN_050505_TOP30_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank']<=30, 'return'].mean(),
 
-                                'bCNN_050505_TOPQ1_Cnt': pred_result.loc[pred_result['Prob_Positive_pctRank'] <= 0.1, 'return'].groupby('date').count().mean(),
-                                'bCNN_050505_TOPQ1_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank'] <= 0.1, 'return'].mean(),
-                                'bCNN_050505_TOPQ2_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank'] <= 0.2, 'return'].mean(),
-                                'bCNN_050505_TOPQ3_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank'] <= 0.3, 'return'].mean(),
+                                'acc_Train': [bCNN_050505_Tacc],
+                                'accVal': [bCNN_050505_Vacc],
+                                'acc_Test': [bCNN_050505_acc],
+                                'eps': [bCNN_050505_eps],
+                                'avg_loss': [bCNN_050505_avg_loss],
 
-                                'bCNN_050505_THR50_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.50, 'return'].groupby('date').count().mean(),
-                                'bCNN_050505_THR50_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.50, 'return'].mean(),
-                                'bCNN_050505_THR55_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.55, 'return'].groupby('date').count().mean(),
-                                'bCNN_050505_THR55_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.55, 'return'].mean(),
-                                'bCNN_050505_THR60_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.60, 'return'].groupby('date').count().mean(),
-                                'bCNN_050505_THR60_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.60, 'return'].mean(),
+                                'prec': [bCNN_050505_prec],
+                                'rcll': [bCNN_050505_rcll],
+                                'f1': [bCNN_050505_f1],
 
-                                'bCNN_050505_acc': [bCNN_050505_acc],
-                                'bCNN_050505_prec': [bCNN_050505_prec],
-                                'bCNN_050505_rcll': [bCNN_050505_rcll],
-                                'bCNN_050505_f1': [bCNN_050505_f1],
-                                'bCNN_050505_Tacc': [bCNN_050505_Tacc],
-                                'bCNN_050505_Vacc': [bCNN_050505_Vacc],
-                                'bCNN_050505_eps': [bCNN_050505_eps],
-                                'bCNN_050505_avg_loss': [bCNN_050505_avg_loss],
+                                'preds': [sum(bCNN_050505_preds) / len(bCNN_050505_preds)],
+                                'TOP5_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_False']<=5, 'return'].mean(),
+                                'TOP10_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_False']<=10, 'return'].mean(),
+                                'TOP30_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_False']<=30, 'return'].mean(),
+                                'BTM5_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 5, 'return'].mean(),
+                                'BTM10_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 10, 'return'].mean(),
+                                'BTM30_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 30, 'return'].mean(),
+
+                                'TOPQ1_Cnt': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.1, 'return'].groupby('date').count().mean(),
+                                'TOPQ1_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.1, 'return'].mean(),
+                                'TOPQ2_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.2, 'return'].mean(),
+                                'TOPQ3_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.3, 'return'].mean(),
+                                'BTMQ1_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.1, 'return'].mean(),
+                                'BTMQ2_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.2, 'return'].mean(),
+                                'BTMQ3_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.3, 'return'].mean(),
+
+                                'THR50_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.50, 'return'].groupby('date').count().mean(),
+                                'THR55_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.55, 'return'].groupby('date').count().mean(),
+                                'THR60_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.60, 'return'].groupby('date').count().mean(),
+                                'THR50_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.50, 'return'].mean(),
+                                'THR55_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.55, 'return'].mean(),
+                                'THR60_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.60, 'return'].mean(),
                             })
                             output_df = pd.concat([output_df, tmp], ignore_index=True)
                             print(output_df)
@@ -713,4 +724,4 @@ if __name__ == '__main__':
 
 
 
-# output_df.to_excel('./ConvNeXtLite_grid_search_results_3.xlsx', index=False)
+# output_df.to_excel('./ConvNeXtLite_results.xlsx', index=False)
