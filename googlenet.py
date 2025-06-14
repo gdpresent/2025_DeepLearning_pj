@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[2]:
-
-
 import torch
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, Subset, Dataset
@@ -28,9 +22,7 @@ import time
 import warnings
 warnings.filterwarnings('ignore')
 
-
-# In[8]:
-
+os.makedirs("C:/Users/flydc/jupyter_project/pjt1_deep_learning/models/KR_GoogLeNet", exist_ok=True)
 
 # =========================
 # [UTIL] Parquet 파일 저장/로딩
@@ -193,8 +185,6 @@ class Inception(nn.Module):
             self.branch3(x),
             self.branch4(x)
         ], 1)
-
-
 class GoogLeNet(nn.Module):
     def __init__(self, in_channels=1, num_classes=2, dropout=0.4):
         super().__init__()
@@ -475,10 +465,6 @@ class CustomDataset_all(Dataset):
             dt_code_set.add(f'{dt.strftime("%Y%m%d")}_{code}')
         return dt_code_set
 
-
-# In[10]:
-
-
 if __name__ == "__main__":
     # [Step1] 기본 설정
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -488,8 +474,8 @@ if __name__ == "__main__":
     TRAIN_RATIO = 0.7
     BATCH_SIZE = 128
 
-    LR_pow = 5
-    LR = 1 / (10 ** LR_pow)  # = 1e-5
+    LR_pow = 4
+    LR = 1 / (10 ** LR_pow)  # = 1e-4
 
     EPOCHS = 1000            # Max_EPOCH
     N_EPOCH_ES = 3           # MaxTry
@@ -548,13 +534,13 @@ if __name__ == "__main__":
         train_loader = DataLoader(Subset(dataset, train_idx), batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(Subset(dataset, val_idx), batch_size=BATCH_SIZE, shuffle=False)
         """ ★모델★ """
-        model = nn.DataParallel(GoogLeNet_CNN_5day(dr_rate=0.5, stt_chnl=1)).to(DEVICE)
+        model = nn.DataParallel(GoogLeNet_CNN_5day(dr_rate=0.2, stt_chnl=1)).to(DEVICE)
         # model = nn.DataParallel(SENet_CNN_5day(dr_rate=0.5, stt_chnl=1)).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         criterion = nn.CrossEntropyLoss()
 
-        save_model_path = f"./baseline_model_{i}.pt"
-        save_history_path = f"./baseline_history_{i}.pt"
+        save_model_path = f"C:/Users/flydc/jupyter_project/pjt1_deep_learning/models/KR_GoogLeNet/googlenet_model_{i}.pt"
+        save_history_path = f"C:/Users/flydc/jupyter_project/pjt1_deep_learning/models/KR_GoogLeNet/googlenet_history_{i}.pt"
 
         print(f"\n=========== [Iteration {i}] ===========")
         train_acc, val_acc, train_epochs = Train_Nepoch_ES_AMP(
@@ -591,24 +577,33 @@ if __name__ == "__main__":
         prec = precision_score(targets, preds)
         rec = recall_score(targets, preds)
         f1 = f1_score(targets, preds)
-
+        # labels, predicts 비율 계산
+        label_ratio = int(100 * (sum(targets) / len(targets)))
+        pred_ratio = int(100 * (sum(preds) / len(preds)))
+        
         print("=" * 30)
+        print(f"[{i}] labels   : {label_ratio}%")
+        print(f"[{i}] predicts : {pred_ratio}%")
         print(f"[{i}] Accuracy  : {acc*100:.2f}%")
         print(f"[{i}] Precision : {prec*100:.2f}%")
         print(f"[{i}] Recall    : {rec*100:.2f}%")
         print(f"[{i}] F1 Score  : {f1*100:.2f}%")
 
         ALL_RESULTS.append({
-            "acc": acc, "prec": prec, "rec": rec, "f1": f1
+            "acc": acc, "prec": prec, "rec": rec, "f1": f1, "label_ratio": label_ratio, "pred_ratio": pred_ratio
         })
 
     # [마무리] 평균 성능 출력
     print("\n\n====== 평균 성능 ======")
-    mean_acc = sum([x['acc'] for x in ALL_RESULTS]) / 5
-    mean_prec = sum([x['prec'] for x in ALL_RESULTS]) / 5
-    mean_rec = sum([x['rec'] for x in ALL_RESULTS]) / 5
-    mean_f1 = sum([x['f1'] for x in ALL_RESULTS]) / 5
-
+    mean_acc = sum([x['acc'] for x in ALL_RESULTS]) / len(ALL_RESULTS)
+    mean_prec = sum([x['prec'] for x in ALL_RESULTS]) / len(ALL_RESULTS)
+    mean_rec = sum([x['rec'] for x in ALL_RESULTS]) / len(ALL_RESULTS)
+    mean_f1 = sum([x['f1'] for x in ALL_RESULTS]) / len(ALL_RESULTS)
+    mean_label_ratio = sum([x['label_ratio'] for x in ALL_RESULTS]) / len(ALL_RESULTS)
+    mean_pred_ratio = sum([x['pred_ratio'] for x in ALL_RESULTS]) / len(ALL_RESULTS)
+    
+    print(f"Mean labels   : {mean_label_ratio:.2f}%")
+    print(f"Mean predicts : {mean_pred_ratio:.2f}%")
     print(f"Mean Accuracy  : {mean_acc*100:.2f}%")
     print(f"Mean Precision : {mean_prec*100:.2f}%")
     print(f"Mean Recall    : {mean_rec*100:.2f}%")
