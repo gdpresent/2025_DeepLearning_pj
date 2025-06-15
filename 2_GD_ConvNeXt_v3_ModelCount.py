@@ -549,98 +549,19 @@ if __name__ == '__main__':
 
     model_name = 'ConvNeXtMini'
     model_save_path = f"./models/{COUNTRY}_{model_name}"
-    os.makedirs(model_save_path, exist_ok=True)
-
-    Max_EPOCH = 1000
-    cap_cut=0.0
-    BATCH_SIZE = 256
-    MaxTry = 3
-    LR_pow = 5
-    DR = 50
-    TRAIN_RATIO= 0.7
-
-    CAP = int(cap_cut*100)
-    LR = 1 / (10 ** LR_pow)
-    dr_rate = DR/100
-
-    SAVE_CONCAT = pd.DataFrame()
-    CodeName=pd.read_excel(f'./data/FnGuide/excel/KR_daily_data_{data_date}.xlsx', sheet_name='보통주', index_col=0)
-    Cap_df_raw = read_pd_parquet(f'{DB_path}/KR_mktcap_{data_date}.hd5').sort_index()
-    business_dates = Cap_df_raw[[Cap_df_raw.notna().sum().sort_values().index[-1]]]
-    monthly_dates = business_dates.groupby(pd.Grouper(freq='BM')).tail(1)#.iloc[:-1]
-    monthly_dates = monthly_dates.loc["2010-06":data_date]
-    monthly_dates = monthly_dates.loc[monthly_dates.index[monthly_dates.index.month.isin([6,12])]]
-    monthly_dates = monthly_dates.reset_index().assign(next_month=lambda x: x['date'].shift(-1))[['date', 'next_month']]  # .applymap(lambda x:pd.to_datetime(x))
-
-    learn_DATE = pd.to_datetime('2023-12-31')
-    test_DATE = pd.to_datetime('2025-04-30')
-    # learn_DATE = pd.to_datetime('2012-12-31')
-    # test_DATE = pd.to_datetime('2013-12-31')
-
-    learn_DATE_str = pd.to_datetime(learn_DATE).strftime("%Y%m%d")
-    test_DATE_str = pd.to_datetime(test_DATE).strftime("%Y%m%d")
-
-    print('learn DATE: ', learn_DATE_str)
-    print('next DATE: ', test_DATE_str)
 
     it_n=0
-    output_df = pd.DataFrame()
+    output_df = pd.read_excel('./ConvNeXtLite_results.xlsx')
     for img_version in [1, 2]:
         if img_version == 1:
             in_ch=1
         else:
             in_ch=3
-        image_path = f'./data/{data_source}/image/{COUNTRY}_v{img_version}_All'
-        test_DL_050505 = DataLoader(CustomDataset_all(image_path,
-                                                      train=False,
-                                                      data_date=data_date,
-                                                      data_source=data_source,
-                                                      F_day_type=5, T_day_type=5,
-                                                      stt_date=learn_DATE + pd.DateOffset(days=1),
-                                                      until_date=test_DATE,
-                                                      Pred_Hrz=5,
-                                                      cap_criterion=cap_cut,
-                                                      transform=transform
-                                                      ), batch_size=256, shuffle=False)
-
-        dataset_050505 = CustomDataset_all(image_data_path=image_path,
-                                           train=True,
-                                           data_date=data_date,
-                                           data_source=data_source,
-                                           F_day_type=5,
-                                           T_day_type=5,
-                                           Pred_Hrz=5,
-                                           until_date=learn_DATE,
-                                           stt_date=learn_DATE - pd.DateOffset(years=2),
-                                           cap_criterion=cap_cut,
-                                           transform=transform
-                                           )
-        Randomly_Stratified_050505 = StratifiedShuffleSplit(n_splits=1, test_size=(1 - TRAIN_RATIO))
-        train_idx_050505, val_idx_050505 = next(Randomly_Stratified_050505.split(list(range(len(dataset_050505))), dataset_050505.labels))
-        train_DS_050505 = Subset(dataset_050505, train_idx_050505)
-        val_DS_050505 = Subset(dataset_050505, val_idx_050505)
-
-        train_DL_050505 = DataLoader(train_DS_050505, batch_size=BATCH_SIZE, shuffle=True)
-        val_DL_050505 = DataLoader(val_DS_050505, batch_size=BATCH_SIZE, shuffle=True)
-
-        i=1
-        print(f'learn_date: {learn_DATE_str}')
-        print(f'cap_cut: {CAP}')
-        print(f'BATCH SIZE: {BATCH_SIZE}')
-        print(f'MaxTry: {MaxTry}')
-        print(f'LR_pow: {LR_pow}')
-        print(f'iteration: {i}')
-
-        # ───── grid candidates ─────
         base_dim_list = [32, 64]  # stem/channel scale
         depths_list = [(1,), (2,), (2, 2), (3, 3), (3, 3, 3)]
         drop_path_rate_list = [0.0, 0.2]  # Stochastic-Depth prob
         dr_rate_list = [0.2, 0.5]  # Dropout prob (fixed)
         lr_list = [1e-3, 3e-4]  # base learning-rate
-        # wd_list = [0.05]  # weight-decay (fixed)
-        # warm_list = [5]  # warm-up epochs
-        # T_0_list = [10]  # cosine restart period
-        # T_mult_list = [2]  # restart multiplier
         tot_loop = len(base_dim_list) * len(depths_list) * len(drop_path_rate_list) * len(dr_rate_list) * len(lr_list) *2
         for base_dim in base_dim_list:
             for depths in depths_list:
@@ -653,138 +574,20 @@ if __name__ == '__main__':
                             lr_tag = f"{lr:.0e}".replace('-0', '-')
                             bCNN_050505_mdl_pth = f"{model_save_path}/Img{img_version}_DEP{depth_tag}_BD{base_dim}_Dpr{drop_path_rate}_LR{lr_tag}.pt"
                             bCNN_050505_hry_pth = f"{model_save_path}/Img{img_version}_DEP{depth_tag}_BD{base_dim}_Dpr{drop_path_rate}_LR{lr_tag}_hist.pt"
-                            # bCNN_050505_model = nn.DataParallel(baseline_CNN_5day(dr_rate=dr_rate, stt_chnl=1)).to(DEVICE)
-
-                            if os.path.exists(bCNN_050505_hry_pth):
-                                print(f'이미 학습된 모델이 존재합니다: {bCNN_050505_mdl_pth}')
-                                pass
-                            else:
-                                print(f'모델 학습 시작: {bCNN_050505_mdl_pth}')
-                                bCNN_050505_model = ConvNeXtMini(in_ch=in_ch, num_classes=2, base_dim=base_dim, depths=depths, drop_path_rate=drop_path_rate, dr_rate=dr_rate).to(DEVICE)
-                                bCNN_050505_model_latest_val_loss = 100E100
-
-                                # optimizer 설정해서
-                                # bCNN_050505_optr = optim.Adam(bCNN_050505_model.parameters(), lr=LR)
-                                bCNN_050505_optr = build_optimizer(bCNN_050505_model, lr=lr, wd=0.05)
-                                bCNN_050505_scheduler = get_scheduler(bCNN_050505_optr, warm_epochs = 5, base_lr = lr, T_0 = 10, T_mult = 2)
-
-
-                                print('================bCNN_050505================\n' * 1)
-                                bCNN_050505_Tacc, bCNN_050505_Vacc, bCNN_050505_eps = Train_Nepoch_ES_AMP(bCNN_050505_model,
-                                                                                                          train_DL_050505,
-                                                                                                          val_DL_050505,
-                                                                                                          criterion,
-                                                                                                          DEVICE,
-                                                                                                          bCNN_050505_optr,
-                                                                                                          Max_EPOCH, BATCH_SIZE,
-                                                                                                          TRAIN_RATIO,
-                                                                                                          bCNN_050505_mdl_pth,
-                                                                                                          bCNN_050505_hry_pth,
-                                                                                                          MaxTry,
-                                                                                                          bCNN_050505_model_latest_val_loss,
-                                                                                                          bCNN_050505_scheduler
-
-                                                                                                          )
                             bCNN_050505_model = ConvNeXtMini(in_ch=in_ch, num_classes=2, base_dim=base_dim, depths=depths, drop_path_rate=drop_path_rate, dr_rate=dr_rate).to(DEVICE)
                             bCNN_050505_model.load_state_dict(torch.load(bCNN_050505_mdl_pth, map_location=DEVICE))
+                            NumParam=count_parameters(bCNN_050505_model)
 
-                            model_hist = torch.load(bCNN_050505_hry_pth)
-                            bCNN_050505_Tacc, bCNN_050505_Vacc, bCNN_050505_eps = model_hist["acc_history"]['train'][-1], model_hist["acc_history"]['val'][-1], len(model_hist["acc_history"]['train'])
-
-                            bCNN_050505_avg_loss, \
-                            bCNN_050505_preds_tmp,\
-                            bCNN_050505_codes,\
-                            bCNN_050505_dates,\
-                            bCNN_050505_returns,\
-                            bCNN_050505_labels = eval_loop(test_DL_050505, bCNN_050505_model, criterion, DEVICE)
-
-                            # 예측 결과를 최대 확률의 인덱스로 변환
-                            bCNN_050505_preds = torch.argmax(torch.nn.Softmax(dim=1)(bCNN_050505_preds_tmp), dim=1).cpu().numpy()
-                            bCNN_050505_1preds = torch.nn.Softmax(dim=1)(bCNN_050505_preds_tmp)[:, 1].cpu().numpy()
-
-
-                            # Accuracy= 올바른 예측 수 / 전체 예측 수 -> 내가 베팅한 것 중 몇 개 적중했냐
-                            bCNN_050505_acc = accuracy_score(bCNN_050505_labels, bCNN_050505_preds)
-
-                            # Prediction = 참 양성(TP) / (참 양성(TP) + 거짓 양성(FP)) -> 내가 오를거라 베팅한것 중 진짜 오른것은 몇 개냐
-                            # 정밀도가 높을수록 모델의 성능이 좋다
-                            bCNN_050505_prec = precision_score(bCNN_050505_labels, bCNN_050505_preds)
-
-                            # Recall = 참 양성(TP) / (참 양성(TP) + 거짓 음성(FN)) ->실제로 양성인 샘플 중에서 모델이 양성으로 정확히 예측한 샘플의 비율
-                            # 재현율이 높을수록 모델의 성능이 좋다
-                            bCNN_050505_rcll = recall_score(bCNN_050505_labels, bCNN_050505_preds)
-
-                            # F1 = Prediction와 Recall의 조화평균
-                            bCNN_050505_f1 = f1_score(bCNN_050505_labels, bCNN_050505_preds)
-                            pred_result=inference_result_save(bCNN_050505_1preds, bCNN_050505_codes, bCNN_050505_dates, bCNN_050505_returns, bCNN_050505_labels, bCNN_050505_eps)
-                            pred_result=pred_result[pred_result['종목코드'].isin(CodeName.index)]
-                            pred_result['Prob_Positive_intRank_False'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False)
-                            pred_result['Prob_Positive_pctRank_Flase'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False, pct=True)
-                            pred_result['Prob_Positive_intRank_True'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=True)
-                            pred_result['Prob_Positive_pctRank_True'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=True, pct=True)
-
-                            print(f'{"=" * 20} bCNN_050505{"=" * 20}')
-                            print(f'bCNN_050505 labels: {int(100 * (sum(bCNN_050505_labels) / len(bCNN_050505_labels)))}%')
-                            print(f'bCNN_050505 predicts: {int(100 * (sum(bCNN_050505_preds) / len(bCNN_050505_preds)))}%')
-                            print(f'bCNN_050505 Accuracy: {int(10000 * (bCNN_050505_acc)) / 100}%')
-                            print(f'bCNN_050505 Precision: {int(10000 * (bCNN_050505_prec)) / 100}%')
-                            print(f'bCNN_050505 Recall: {int(10000 * (bCNN_050505_rcll)) / 100}%')
-                            print(f'bCNN_050505 F1-score: {int(10000 * (bCNN_050505_f1)) / 100}%')
-
-                            print(f'img_version: {img_version}')
-                            print(f'base_dim: {base_dim}')
-                            print(f'depths: {depths}')
-                            print(f'drop_path_rate: {drop_path_rate}')
-                            print(f'dr_rate: {dr_rate}')
-                            print(f'lr: {lr}')
-                            print(f'=============={it_n} / {tot_loop}==============')
-                            tmp = pd.DataFrame({
-                                'img_version': [img_version],
-                                'base_dim': [base_dim],
-                                'depths': [depths],
-                                'drop_path_rate': [drop_path_rate],
-                                'dr_rate': [dr_rate],
-                                'lr': [lr],
-
-                                'acc_Train': [bCNN_050505_Tacc],
-                                'accVal': [bCNN_050505_Vacc],
-                                'acc_Test': [bCNN_050505_acc],
-                                'eps': [bCNN_050505_eps],
-                                'avg_loss': [bCNN_050505_avg_loss],
-
-                                'prec': [bCNN_050505_prec],
-                                'rcll': [bCNN_050505_rcll],
-                                'f1': [bCNN_050505_f1],
-
-                                'preds': [sum(bCNN_050505_preds) / len(bCNN_050505_preds)],
-                                'TOP5_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_False']<=5, 'return'].mean(),
-                                'TOP10_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_False']<=10, 'return'].mean(),
-                                'TOP30_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_False']<=30, 'return'].mean(),
-                                'BTM5_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 5, 'return'].mean(),
-                                'BTM10_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 10, 'return'].mean(),
-                                'BTM30_MeanRet': pred_result.loc[pred_result['Prob_Positive_intRank_True'] <= 30, 'return'].mean(),
-
-                                'TOPQ1_Cnt': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.1, 'return'].groupby('date').count().mean(),
-                                'TOPQ1_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.1, 'return'].mean(),
-                                'TOPQ2_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.2, 'return'].mean(),
-                                'TOPQ3_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_Flase'] <= 0.3, 'return'].mean(),
-                                'BTMQ1_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.1, 'return'].mean(),
-                                'BTMQ2_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.2, 'return'].mean(),
-                                'BTMQ3_MeanRet': pred_result.loc[pred_result['Prob_Positive_pctRank_True'] <= 0.3, 'return'].mean(),
-
-                                'THR50_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.50, 'return'].groupby('date').count().mean(),
-                                'THR55_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.55, 'return'].groupby('date').count().mean(),
-                                'THR60_Cnt': pred_result.loc[pred_result['Prob_Positive']>=0.60, 'return'].groupby('date').count().mean(),
-                                'THR50_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.50, 'return'].mean(),
-                                'THR55_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.55, 'return'].mean(),
-                                'THR60_MeanRet': pred_result.loc[pred_result['Prob_Positive']>=0.60, 'return'].mean(),
-                            })
-                            output_df = pd.concat([output_df, tmp], ignore_index=True)
-                            print(output_df)
+                            output_df.loc[(output_df['img_version']== img_version) &
+                             (output_df['base_dim']==base_dim) &
+                             (output_df['depths']==str(depths)) &
+                             (output_df['drop_path_rate']==drop_path_rate ) &
+                             (output_df['dr_rate']==dr_rate)&
+                             (output_df['lr']==lr), 'NumParam'] = NumParam['total_params']
 
 
 
 
-# output_df.to_excel('./ConvNeXtLite_results.xlsx', index=False)
+# output_df.to_excel('./ConvNeXtLite_results_NumCount추가.xlsx', index=False)
 
 

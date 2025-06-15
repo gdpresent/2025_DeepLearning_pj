@@ -492,7 +492,68 @@ def inference_result_save(pred1, test_code, test_date, test_return, test_label, 
             "label": test_label,
             "epoch": epoches
         }, index=pd.to_datetime(test_date)).rename_axis("date").sort_index()
+from typing import Dict
+def count_parameters(
+    model: torch.nn.Module,
+    by_layer: bool = False,
+    require_grad_only: bool = False,
+) -> Dict[str, int | float | pd.DataFrame]:
+    """
+    모델 파라미터 개수 및 메모리 사용량(FP32) 계산.
 
+    Parameters
+    ----------
+    model : nn.Module
+        대상 모델. `DataParallel` 인 경우 model.module 로 자동 전개.
+    by_layer : bool, default False
+        True → layer별 개수를 `pandas.DataFrame` 으로 추가 반환.
+    require_grad_only : bool, default False
+        True → `requires_grad=True` 인 텐서만 집계 (freeze‑fine‑tuning 시 유용).
+
+    Returns
+    -------
+    Dict[str, Any]
+        ├─ total_params       (int) : 전체 파라미터 수
+        ├─ trainable_params   (int) : requires_grad=True 파라미터 수
+        ├─ total_memory(MB)   (float) : FP32 기준 메모리 사용량
+        └─ layer_details      (DataFrame) : by_layer=True 일 때만 포함
+    """
+    # DataParallel → 실제 모델 꺼내기
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module
+
+    param_iter = (
+        (n, p) for n, p in model.named_parameters()
+        if (p.requires_grad or not require_grad_only)
+    )
+
+    total = 0
+    trainable = 0
+    layer_rows = []
+
+    for name, p in param_iter:
+        numel = p.numel()
+        total += numel
+        if p.requires_grad:
+            trainable += numel
+        if by_layer:
+            layer_rows.append({
+                "layer": name,
+                "num_params": numel,
+                "trainable": p.requires_grad
+            })
+
+    memory_mb = total * 4 / 1024 ** 2  # float32: 4 Byte
+
+    result: Dict[str, int | float | pd.DataFrame] = {
+        "total_params": total,
+        "trainable_params": trainable,
+        "total_memory(MB)": round(memory_mb, 2),
+    }
+    if by_layer:
+        result["layer_details"] = pd.DataFrame(layer_rows)
+
+    return result
 if __name__ == '__main__':
     # 디바이스 설정
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -706,4 +767,4 @@ if __name__ == '__main__':
         })
         output_df = pd.concat([output_df, tmp], ignore_index=True)
         print(output_df)
-    output_df.to_excel(f'./{model_name}_results.xlsx', index=False)
+    # output_df.to_excel(f'./{model_name}_results.xlsx', index=False)
