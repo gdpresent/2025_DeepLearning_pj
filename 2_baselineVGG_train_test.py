@@ -409,8 +409,7 @@ if __name__ == '__main__':
                                            transform=transform
                                            )
         Randomly_Stratified_050505 = StratifiedShuffleSplit(n_splits=1, test_size=(1 - TRAIN_RATIO))
-        train_idx_050505, val_idx_050505 = next(
-            Randomly_Stratified_050505.split(list(range(len(dataset_050505))), dataset_050505.labels))
+        train_idx_050505, val_idx_050505 = next(Randomly_Stratified_050505.split(list(range(len(dataset_050505))), dataset_050505.labels))
         train_DS_050505 = Subset(dataset_050505, train_idx_050505)
         val_DS_050505 = Subset(dataset_050505, val_idx_050505)
 
@@ -451,7 +450,6 @@ if __name__ == '__main__':
         bCNN_050505_Tacc, bCNN_050505_Vacc, bCNN_050505_eps = model_hist["acc_history"]['train'][-1], \
         model_hist["acc_history"]['val'][-1], len(model_hist["acc_history"]['train'])
 
-
         bCNN_050505_avg_loss, \
         bCNN_050505_preds_tmp,\
         bCNN_050505_codes,\
@@ -477,8 +475,7 @@ if __name__ == '__main__':
         # F1 = Prediction와 Recall의 조화평균
         bCNN_050505_f1 = f1_score(bCNN_050505_labels, bCNN_050505_preds)
 
-        pred_result = inference_result_save(bCNN_050505_1preds, bCNN_050505_codes, bCNN_050505_dates,
-                                            bCNN_050505_returns, bCNN_050505_labels, bCNN_050505_eps)
+        pred_result = inference_result_save(bCNN_050505_1preds, bCNN_050505_codes, bCNN_050505_dates, bCNN_050505_returns, bCNN_050505_labels, bCNN_050505_eps)
         pred_result = pred_result[pred_result['종목코드'].isin(CodeName.index)]
         pred_result['Prob_Positive_intRank_False'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False)
         pred_result['Prob_Positive_pctRank_Flase'] = pred_result.groupby('date')['Prob_Positive'].rank(ascending=False, pct=True)
